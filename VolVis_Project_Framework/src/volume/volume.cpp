@@ -119,9 +119,25 @@ float Volume::getSampleNearestNeighbourInterpolation(const glm::vec3& coord) con
 // ======= TODO : IMPLEMENT the functions below for tri-linear interpolation ========
 // ======= Consider using the linearInterpolate and biLinearInterpolate functions ===
 // This function returns the trilinear interpolated value at the continuous 3D position given by coord.
-    float Volume::getSampleTriLinearInterpolation(const glm::vec3& coord) const
+float Volume::getSampleTriLinearInterpolation(const glm::vec3& coord) const
 {
-    return 0.0f;
+    //check if the coordinate is within volume boundaries!! I check within 1.0 because the kernel function for linear interpolation does this comparison
+    if (glm::any(glm::lessThan(glm::floor(coord), glm::vec3(0))) || glm::any(glm::greaterThanEqual(glm::ceil(coord), glm::vec3(m_dim)))) {
+        return 0.0f;
+    }
+
+    int upper_z = ceil(coord[2]);
+    int bottom_z = floor(coord[2]);
+
+    glm::vec2 interp_vec = glm::vec2(coord[0], coord[1]);
+
+    float upper_plane_val = biLinearInterpolate(interp_vec, upper_z);
+    float bottom_plane_val = biLinearInterpolate(interp_vec, bottom_z);
+
+    float interpolated_value = linearInterpolate(bottom_plane_val, upper_plane_val, coord[2] - bottom_z);
+
+
+    return interpolated_value;
 }
 
 // This function linearly interpolates the value at X using incoming values g0 and g1 given a factor (equal to the positon of x in 1D)
@@ -130,14 +146,27 @@ float Volume::getSampleNearestNeighbourInterpolation(const glm::vec3& coord) con
 //   factor
 float Volume::linearInterpolate(float g0, float g1, float factor)
 {
+
     return g0 * factor + g1 * (1 - factor);
+
+
 }
 
 // This function bi-linearly interpolates the value at the given continuous 2D XY coordinate for a fixed integer z coordinate.
 float Volume::biLinearInterpolate(const glm::vec2& xyCoord, int z) const
 {
-    
-    return 0.0f;
+
+    float neighbor_bottom_left = getVoxel(floor(xyCoord[0]), floor(xyCoord[1]), z);
+    float neighbor_bottom_right = getVoxel(ceil(xyCoord[0]), floor(xyCoord[1]), z);
+    float neighbor_upper_left = getVoxel(floor(xyCoord[0]), ceil(xyCoord[1]), z);
+    float neighbor_upper_right = getVoxel(ceil(xyCoord[0]), ceil(xyCoord[1]), z);
+
+    float bottom_middle_point = linearInterpolate(neighbor_bottom_left, neighbor_bottom_right, xyCoord[0] - floor(xyCoord[0]));
+    float upper_middle_point = linearInterpolate(neighbor_upper_left, neighbor_upper_right, xyCoord[0] - floor(xyCoord[0]));
+
+    float bilinear_interpolated_point = linearInterpolate(bottom_middle_point, upper_middle_point, xyCoord[1] - floor(xyCoord[1]));
+
+    return bilinear_interpolated_point;
 }
 
 
