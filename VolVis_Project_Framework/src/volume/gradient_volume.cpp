@@ -115,6 +115,22 @@ GradientVoxel GradientVolume::getGradientNearestNeighbor(const glm::vec3& coord)
 // Use the linearInterpolate function that you implemented below.
 GradientVoxel GradientVolume::getGradientLinearInterpolate(const glm::vec3& coord) const
 {
+    // check if the coordinate is within volume boundaries!! I check within 1.0 because the kernel function for linear interpolation does this comparison
+    if (glm::any(glm::lessThan(glm::floor(coord), glm::vec3(0))) || glm::any(glm::greaterThanEqual(glm::ceil(coord), glm::vec3(m_dim)))) {
+        return GradientVoxel { glm::vec3(0), 0.0f };
+    }
+
+    int upper_z = ceil(coord[2]);
+    int bottom_z = floor(coord[2]);
+
+    const glm::vec2 interp_vec = glm::vec2(coord[0], coord[1]);
+
+    GradientVoxel upper_plane_val = biLinearInterpolate(interp_vec, upper_z);
+    GradientVoxel bottom_plane_val = biLinearInterpolate(interp_vec, bottom_z);
+
+    GradientVoxel interpolated_value = linearInterpolate(bottom_plane_val, upper_plane_val, coord[2] - bottom_z);
+
+    return interpolated_value;
     return GradientVoxel {};
 }
 
@@ -123,8 +139,24 @@ GradientVoxel GradientVolume::getGradientLinearInterpolate(const glm::vec3& coor
 // At t=0, linearInterpolate should return g0 and at t=1 it returns g1.
 GradientVoxel GradientVolume::linearInterpolate(const GradientVoxel& g0, const GradientVoxel& g1, float factor)
 {
-    glm::vec3 res = g0.dir * (1 - factor) + g1.dir * factor;
+    glm::vec3 res = g0.dir * factor + g1.dir * (1 - factor);
     return GradientVoxel { res, glm::length(res) };
+}
+
+GradientVoxel GradientVolume::biLinearInterpolate(const glm::vec2& xyCoord, int z) const
+{
+
+    GradientVoxel neighbor_bottom_left = getGradient(floor(xyCoord[0]), floor(xyCoord[1]), z);
+    GradientVoxel neighbor_bottom_right = getGradient(ceil(xyCoord[0]), floor(xyCoord[1]), z);
+    GradientVoxel neighbor_upper_left = getGradient(floor(xyCoord[0]), ceil(xyCoord[1]), z);
+    GradientVoxel neighbor_upper_right = getGradient(ceil(xyCoord[0]), ceil(xyCoord[1]), z);
+
+    GradientVoxel bottom_middle_point = linearInterpolate(neighbor_bottom_left, neighbor_bottom_right, xyCoord[0] - floor(xyCoord[0]));
+    GradientVoxel upper_middle_point = linearInterpolate(neighbor_upper_left, neighbor_upper_right, xyCoord[0] - floor(xyCoord[0]));
+
+    GradientVoxel bilinear_interpolated_point = linearInterpolate(bottom_middle_point, upper_middle_point, xyCoord[1] - floor(xyCoord[1]));
+
+    return bilinear_interpolated_point;
 }
 
 // This function returns a gradientVoxel without using interpolation
@@ -133,4 +165,5 @@ GradientVoxel GradientVolume::getGradient(int x, int y, int z) const
     const size_t i = static_cast<size_t>(x + m_dim.x * (y + m_dim.y * z));
     return m_data[i];
 }
+
 }
