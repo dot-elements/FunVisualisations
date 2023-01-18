@@ -1,0 +1,11 @@
+
+VolVis_Project_Framework/.vs
+VolVis_Project_Framework/cmake
+VolVis_Project_Framework/integrity_tests
+VolVis_Project_Framework/out
+VolVis_Project_Framework/resources
+VolVis_Project_Framework/shaders
+VolVis_Project_Framework/.clang-format
+VolVis_Project_Framework/CMakeLists.txt
+VolVis_Project_Framework/CMakeSettings.json
+VolVis_Project_Framework/vcpkg.json
