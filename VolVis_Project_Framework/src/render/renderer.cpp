@@ -9,6 +9,7 @@
 #include <tbb/blocked_range2d.h>
 #include <tbb/parallel_for.h>
 #include <tuple>
+#include <glm/trigonometric.hpp>
 
 namespace render {
 
@@ -275,7 +276,29 @@ glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::Gr
 // Use getTFValue to compute the color for a given volume value according to the 1D transfer function.
 glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
 {
-    return glm::vec4(0.0f);
+    glm::vec3 finalColor = { 0.0f, 0.0f, 0.0f };
+    float opacity = 0.0f;
+    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+    bool shading = m_config.volumeShading;
+
+    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+        float val = m_pVolume->getSampleInterpolate(samplePos);
+        glm::vec4 tf = getTFValue(val);
+        glm::vec3 color = { 0.0f, 0.0f, 0.0f };
+        if (shading)
+            color = computePhongShading(glm::vec3(tf.x, tf.y, tf.z), m_pGradientVolume->getGradientInterpolate(samplePos), -m_pCamera->position() + samplePos, -m_pCamera->position() + samplePos);
+        else
+            color = { tf.x, tf.y, tf.z };
+        finalColor += (1 - opacity) * (color * tf.w);
+        opacity += (1 - opacity) * tf.w;
+
+        // if (totalOpacity )
+        //  maybe implement early termination
+        if (opacity > .99f)
+            break;
+    }
+    return glm::vec4(finalColor, opacity);
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
@@ -294,7 +317,27 @@ glm::vec4 Renderer::getTFValue(float val) const
 // Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
 glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 {
-    return glm::vec4(0.0f);
+    glm::vec4 finalColor = { 0.0f, 0.0f, 0.0f, 0.0f };
+    
+    glm::vec4 tf = m_config.TF2DColor;
+    float finalOpacity = 0.0f;
+    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+    bool shading = m_config.volumeShading;
+
+    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+        float val = m_pVolume->getSampleInterpolate(samplePos);
+        
+        float opacity = getTF2DOpacity(val, m_pGradientVolume->getGradientInterpolate(samplePos).magnitude);
+        glm::vec4 color = tf * tf.w;
+        color.w /= tf.w;
+        float oldOpacity = finalColor.w;
+        color *= opacity;
+        finalColor += (1 - oldOpacity) * color;
+        if (finalColor.w > .99f)
+            break;
+    }
+    return finalColor;
 }
 
 // ======= TODO: IMPLEMENT ========
@@ -306,7 +349,15 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 // The 2D transfer function settings can be accessed through m_config.TF2DIntensity and m_config.TF2DRadius.
 float Renderer::getTF2DOpacity(float intensity, float gradientMagnitude) const
 {
-    return 0.0f;
+
+    //check if intensity and gradientMagnitude are inside triangle
+        
+    float interval = m_config.TF2DRadius * gradientMagnitude / (m_pGradientVolume->maxMagnitude() - m_pGradientVolume->minMagnitude());
+
+    float pos = abs(intensity - m_config.TF2DIntensity)/interval;
+    if (pos >= 1.0f)
+        return 0.0f;
+    return 1.0f - pos;
 }
 
 // This function computes if a ray intersects with the axis-aligned bounding box around the volume.
