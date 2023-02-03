@@ -6,6 +6,10 @@
 #include <iostream>
 #include <nfd.h>
 
+#include <glm/common.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
+
 namespace ui {
 
 Menu::Menu(const glm::ivec2& baseRenderResolution)
@@ -77,10 +81,10 @@ void Menu::drawMenu(const glm::ivec2& pos, const glm::ivec2& size, std::chrono::
         const auto renderConfigBefore = m_renderConfig;
         const auto interpolationModeBefore = m_interpolationMode;
 
-        showRayCastTab(renderTime);
+        //showRayCastTab(renderTime);
         showCoolWarmShadingTab();
-        showTransFuncTab();
-        show2DTransFuncTab();
+        //showTransFuncTab();
+        //show2DTransFuncTab();
         
 
         if (m_renderConfig != renderConfigBefore)
@@ -98,7 +102,7 @@ void Menu::showLoadVolTab()
 {
     if (ImGui::BeginTabItem("Load")) {
 
-        if (ImGui::Button("Loaddd volume")) {
+        if (ImGui::Button("Load volume")) {
             nfdchar_t* pOutPath = nullptr;
             nfdresult_t result = NFD_OpenDialog("fld", nullptr, &pOutPath);
 
@@ -159,6 +163,58 @@ void Menu::showRayCastTab(std::chrono::duration<double> renderTime)
         ImGui::EndTabItem();
     }
 }
+bool isC = 1;
+float beta = .6f, y = .4f, a = .2f, b = .4f;
+glm::vec3 col1 = { 0.0f, 0.0f, 0.4f };
+glm::vec3 col2 = { 0.4f, 0.4f, 0.0f };
+void Menu::showCoolWarmShadingTab()
+{
+    
+    if (ImGui::BeginTabItem("Cool to warm shading")) {
+        // glm::vec4 color = glm::vec4(0.0f, 0.8f, 0.6f, 0.3f);
+        // ImGui::ColorPicker4("Color", glm::value_ptr(color));
+        ImGui::Text("Cool to warm palette:");
+        ImGui::NewLine();
+        ImGui::Checkbox("Use Blue and Yellow scaling", &isC);
+        ImGui::NewLine();
+
+        if (isC) {
+            ImGui::DragFloat("Yellow", &y, 0.1f, 0.0f, 1.f);
+            ImGui::NewLine();
+            ImGui::DragFloat("Blue", &b, 0.1f, 0.0f, 1.f);
+            ImGui::NewLine();
+            m_renderConfig.coolColor = { 0.0f, 0.0f, b };
+            m_renderConfig.warmColor = { y, y, 0.f };
+        }
+        else {
+            ImGui::ColorEdit3("Cool color", value_ptr(col1));
+            ImGui::NewLine();
+            ImGui::ColorEdit3("Warm color", value_ptr(col2));
+            m_renderConfig.coolColor = col1;
+            m_renderConfig.warmColor = col2;
+        }
+
+        ImGui::NewLine();
+        ImGui::ColorEdit3("Base color", glm::value_ptr(m_renderConfig.modelColor));
+        int* pRenderModeInt = reinterpret_cast<int*>(&m_renderConfig.renderMode);
+        m_renderConfig.renderResolution = glm::ivec2(glm::vec2(m_baseRenderResolution) * m_resolutionScale);
+        ImGui::NewLine();
+
+        ImGui::DragFloat("Alpha", &m_renderConfig.alphaColor, 0.1f, 0.0f, 1.f);
+        ImGui::NewLine();
+        ImGui::DragFloat("Beta", &m_renderConfig.betaColor, 0.1f, 0.0f, 1.f);
+        ImGui::NewLine();
+
+
+        ImGui::DragFloat("Iso Value", &m_renderConfig.isoValue, 0.1f, 0.0f, float(m_volumeMax));
+        ImGui::NewLine();
+
+        ImGui::Text("Render Mode:");
+        ImGui::RadioButton("Normal Rendering", pRenderModeInt, int(render::RenderMode::RenderIso));
+        ImGui::RadioButton("Cool to Warm Rendering", pRenderModeInt, int(render::RenderMode::RenderIsoCartoon));
+        ImGui::EndTabItem();
+    }
+}
 
 // This renders the 1D Transfer Function Widget.
 void Menu::showTransFuncTab()
@@ -179,16 +235,7 @@ void Menu::show2DTransFuncTab()
         ImGui::EndTabItem();
     }
 }
-void Menu::showCoolWarmShadingTab()
-{
-    if (ImGui::BeginTabItem("Cool to warm shading")) {
-        m_tf2DWidget->draw();
-        m_tf2DWidget->updateRenderConfig(m_renderConfig);
-        ImGui::Text("Render Mode:");
 
-        ImGui::EndTabItem();
-    }
-}
 void Menu::callRenderConfigChangedCallback() const
 {
     if (m_optRenderConfigChangedCallback)

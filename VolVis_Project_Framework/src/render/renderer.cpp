@@ -118,8 +118,11 @@ void Renderer::render()
             }
             case RenderMode::RenderIso: {
                 color = traceRayISO(ray, sampleStep);
-                //if (y == 2 * x || y == 2 * x + 10) //!!!
-                //    color = traceRayISOWhite(ray, sampleStep);
+
+                break;
+            }
+            case RenderMode::RenderIsoCartoon: {
+                color = traceRayISOCartoon(ray, sampleStep);
 
                 break;
             }
@@ -163,7 +166,12 @@ void Renderer::render()
                 break;
             }
             case RenderMode::RenderIso: {
+                color = traceRayISO(ray, sampleStep);
+                break;
+            }
+            case RenderMode::RenderIsoCartoon: {
                 color = traceRayISOCartoon(ray, sampleStep);
+
                 break;
             }
             case RenderMode::RenderTF2D: {
@@ -262,7 +270,7 @@ glm::vec4 Renderer::traceRayISOCartoon(const Ray& ray, float sampleStep) const
     bool shading = m_config.volumeShading;
     float isoValue = m_config.isoValue;
     //static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
-    static constexpr glm::vec3 isoColor { 1.f, 0.f, 0.f };
+    glm::vec3 isoColor = m_config.modelColor;
     float finalVal = 0.0f;
     glm::vec3 finalColor = { 0.0f, 0.0f, 0.0f };
     auto sample = [&](float tx) { return ray.origin + tx * ray.direction; };
@@ -276,7 +284,9 @@ glm::vec4 Renderer::traceRayISOCartoon(const Ray& ray, float sampleStep) const
                 finalVal = 1;
             } else {
                 glm::vec3 accuracyPos = sample(bisectionAccuracy(ray, t - sampleStep, t, isoValue));
-                finalColor = computeCartoonPhongShading(isoColor, m_pGradientVolume->getGradientInterpolate(accuracyPos), accuracyPos - m_pCamera->position(), accuracyPos - m_pCamera->position());
+                glm::vec3 coolColor = m_config.coolColor;
+                glm::vec3 warmColor = m_config.warmColor;
+                finalColor = computeCartoonPhongShading(isoColor, m_pGradientVolume->getGradientInterpolate(accuracyPos), accuracyPos - m_pCamera->position(), accuracyPos - m_pCamera->position(), coolColor, warmColor, m_config.alphaColor, m_config.betaColor);
 
             
             }
@@ -356,7 +366,7 @@ glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::Gr
     return diffuse + specular + ambient;
 }
 
-glm::vec3 Renderer::computeCartoonPhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
+glm::vec3 Renderer::computeCartoonPhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V, glm::vec3& coolColor, glm::vec3& warmColor, float a, float beta)
 {
     // define params and normalize
     auto params = glm::vec3(0.1f, 0.5f, 0.2f);
@@ -382,12 +392,9 @@ glm::vec3 Renderer::computeCartoonPhongShading(const glm::vec3& color, const vol
     }
 
     auto r = (1 + cos) / 2;
-    float beta=.6f, y =.4f, a=.2f, b =.4f;
-    glm::vec3 kCool, kWarm, kBlue, kYellow;
-    kBlue = { 0, 0, b };
-    kYellow = { y, y, 0 };
-    kCool = kBlue + a * color;
-    kWarm = kYellow + beta * color;
+    glm::vec3 kCool, kWarm;
+    kCool = coolColor + a * color;
+    kWarm = warmColor + beta * color;
 
     auto I = r * kCool + (1 - r) * kWarm; 
     diffuse = I * params[1];

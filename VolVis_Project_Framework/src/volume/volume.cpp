@@ -176,7 +176,15 @@ float Volume::biLinearInterpolate(const glm::vec2& xyCoord, int z) const
 // This function represents the h(x) function, which returns the weight of the cubic interpolation kernel for a given position x
 float Volume::weight(float x)
 {
-    return 0.0f;
+    float a = -1.f;
+    float absX = abs(x);
+    float rez = 0;
+    if (absX >= 0 && absX < 1)
+        rez = (a + 2) * pow(absX, 3) - (a + 3) * pow(absX, 2) + 1;
+    if (absX >= 1 && absX < 2)
+        rez = a * pow(absX, 3) - 5 * a * pow(absX, 2) + 8 * a * absX - 4 * a; 
+    
+    return rez;
 }
 
 // ======= OPTIONAL : This functions can be used to implement cubic interpolation ========

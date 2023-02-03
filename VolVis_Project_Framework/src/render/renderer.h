@@ -42,7 +42,6 @@ protected:
     glm::vec4 traceRayMIP(const Ray& ray, float sampleStep) const;
     glm::vec4 traceRayISO(const Ray& ray, float sampleStep) const;
     glm::vec4 traceRayISOCartoon(const Ray& ray, float sampleStep) const;
-    glm::vec4 traceRayISOWhite(const Ray& ray, float sampleStep) const;
     glm::vec4 traceRayComposite(const Ray& ray, float sampleStep) const;
     glm::vec4 traceRayTF2D(const Ray& ray, float sampleStep) const;
 
@@ -50,7 +49,7 @@ protected:
 
     static glm::vec3 computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& lightDirection, const glm::vec3& viewDirection);
     
-    static glm::vec3 computeCartoonPhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& lightDirection, const glm::vec3& viewDirection);
+    static glm::vec3 computeCartoonPhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& lightDirection, const glm::vec3& viewDirection, glm::vec3& coolColor, glm::vec3& warmColor, float a, float beta);
 
 private:
     void resizeImage(const glm::ivec2& resolution);
