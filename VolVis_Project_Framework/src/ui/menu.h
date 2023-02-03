@@ -40,6 +40,7 @@ private:
     void showRayCastTab(std::chrono::duration<double> renderTime);
     void showTransFuncTab();
     void show2DTransFuncTab();
+    void showCoolWarmShadingTab();
 
     void callRenderConfigChangedCallback() const;
     void callInterpolationModeChangedCallback() const;

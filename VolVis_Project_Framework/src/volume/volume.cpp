@@ -80,6 +80,8 @@ float Volume::getVoxel(int x, int y, int z) const
     return static_cast<float>(m_data[i]);
 }
 
+
+
 // This function returns a value based on the current interpolation mode
 float Volume::getSampleInterpolate(const glm::vec3& coord) const
 {

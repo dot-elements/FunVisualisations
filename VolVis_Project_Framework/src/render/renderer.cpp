@@ -83,6 +83,7 @@ void Renderer::render()
     for (int x = 0; x < m_config.renderResolution.x; x++) {
         for (int y = 0; y < m_config.renderResolution.y; y++) {
 #else
+    //!!!!!! TRACE THE DIRECTION DIRECTLY!!!
     // Parallel for loop (in 2 dimensions) that subdivides the screen into tiles.
     const tbb::blocked_range2d<int> screenRange { 0, m_config.renderResolution.y, 0, m_config.renderResolution.x };
         tbb::parallel_for(screenRange, [&](tbb::blocked_range2d<int> localRange) {
@@ -94,11 +95,12 @@ void Renderer::render()
             const glm::vec2 pixelPos = glm::vec2(x, y) / glm::vec2(m_config.renderResolution);
             Ray ray = m_pCamera->generateRay(pixelPos * 2.0f - 1.0f);
 
+
             // Compute where the ray enters and exists the volume.
             // If the ray misses the volume then we continue to the next pixel.
             if (!instersectRayVolumeBounds(ray, bounds))
                 continue;
-
+            //std::cout << "{" << pixelPos.x << " " << pixelPos.y << "}";
             // Get a color for the current pixel according to the current render mode.
             glm::vec4 color {};
             switch (m_config.renderMode) {
@@ -116,6 +118,9 @@ void Renderer::render()
             }
             case RenderMode::RenderIso: {
                 color = traceRayISO(ray, sampleStep);
+                //if (y == 2 * x || y == 2 * x + 10) //!!!
+                //    color = traceRayISOWhite(ray, sampleStep);
+
                 break;
             }
             case RenderMode::RenderTF2D: {
@@ -128,12 +133,59 @@ void Renderer::render()
 
 #if PARALLELISM == 1
         }
+
+        
     }
 });
+    tbb::parallel_for(screenRange, [&](tbb::blocked_range2d<int> localRange) {
+    for (int y = std::begin(localRange.rows()); y != std::end(localRange.rows()); y++) {
+        for (int x = std::begin(localRange.cols()); x != std::end(localRange.cols()); x++) {
+            // Compute a ray for the current pixel.
+            const glm::vec2 pixelPos = glm::vec2(x, y) / glm::vec2(m_config.renderResolution);
+            Ray ray = m_pCamera->generateRay(pixelPos * 2.0f - 1.0f);
+
+            // Compute where the ray enters and exists the volume.
+            // If the ray misses the volume then we continue to the next pixel.
+            if (!instersectRayVolumeBounds(ray, bounds))
+                continue;
+            glm::vec4 color {};
+            switch (m_config.renderMode) {
+            case RenderMode::RenderSlicer: {
+                color = traceRaySlice(ray, volumeCenter, planeNormal);
+                break;
+            }
+            case RenderMode::RenderMIP: {
+                color = traceRayMIP(ray, sampleStep);
+                break;
+            }
+            case RenderMode::RenderComposite: {
+                color = traceRayComposite(ray, sampleStep);
+                break;
+            }
+            case RenderMode::RenderIso: {
+                color = traceRayISOCartoon(ray, sampleStep);
+                break;
+            }
+            case RenderMode::RenderTF2D: {
+                color = traceRayTF2D(ray, sampleStep);
+                break;
+            }
+            };
+            // Write the resulting color to the screen.
+            fillColor(x, y, color);
+        }
+    }
+    });
 #else
             }
         }
 #endif
+
+}
+
+bool isPointOnLine(glm::vec2 r, glm::vec2 p, glm::vec2 v)
+{
+    return (p.x - r.x) / v.x == (p.y - r.y) / v.y;
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
@@ -181,6 +233,7 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
     static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
     float finalVal = 0.0f;
     glm::vec3 finalColor = { 0.0f, 0.0f, 0.0f };
+    glm::vec2 linesDir = { 1.f, 1.f };
     auto sample = [&](float tx) { return ray.origin + tx * ray.direction; };
     glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
     const glm::vec3 increment = sampleStep * ray.direction;
@@ -203,6 +256,38 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
         return glm::vec4(isoColor * finalVal, 1.0f);
     return glm::vec4(finalColor, 1.0f);
 }
+
+glm::vec4 Renderer::traceRayISOCartoon(const Ray& ray, float sampleStep) const
+{
+    bool shading = m_config.volumeShading;
+    float isoValue = m_config.isoValue;
+    //static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
+    static constexpr glm::vec3 isoColor { 1.f, 0.f, 0.f };
+    float finalVal = 0.0f;
+    glm::vec3 finalColor = { 0.0f, 0.0f, 0.0f };
+    auto sample = [&](float tx) { return ray.origin + tx * ray.direction; };
+    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+        const float val = m_pVolume->getSampleInterpolate(samplePos);
+
+        if (val > isoValue) {
+            if (!shading) {
+                finalVal = 1;
+            } else {
+                glm::vec3 accuracyPos = sample(bisectionAccuracy(ray, t - sampleStep, t, isoValue));
+                finalColor = computeCartoonPhongShading(isoColor, m_pGradientVolume->getGradientInterpolate(accuracyPos), accuracyPos - m_pCamera->position(), accuracyPos - m_pCamera->position());
+
+            
+            }
+            break;
+        }
+    }
+    if (!shading)
+        return glm::vec4(isoColor * finalVal, 1.0f);
+    return glm::vec4(finalColor, 1.0f);
+}
+
 
 // ======= TODO: IMPLEMENT ========
 // Given that the iso value lies somewhere between t0 and t1, find a t for which the value
@@ -256,21 +341,58 @@ glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::Gr
     auto cos = std::max(0.0f, glm::dot(grad, light));
 
     // compute ambient
-    auto ambient = params[0] * color;
+    auto ambient = params[0] * color; //kd*ka
 
     if (cos > 0.0f) {
 
         // compute diffuse
-        diffuse = params[1] * cos * color;
+        diffuse = params[1] * cos * color; //kd * cos
+        // compute specular
+        glm::vec3 reflection = glm::normalize(glm::reflect(-light, grad));
+        float phi = std::max(0.0f, glm::dot(reflection, view));
+        specular = params[2] * std::pow(phi, alpha) * color;
+    }
+    //std::cout << "{" << color.x << " " << color.y << " " << color.z << "}";
+    return diffuse + specular + ambient;
+}
+
+glm::vec3 Renderer::computeCartoonPhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
+{
+    // define params and normalize
+    auto params = glm::vec3(0.1f, 0.5f, 0.2f);
+    float alpha = 100.0f;
+    glm::vec3 light = glm::normalize(L);
+    glm::vec3 view = glm::normalize(V);
+    glm::vec3 grad = gradient.dir / gradient.magnitude;
+    auto diffuse = glm::vec3(0.0f, 0.0f, 0.0f);
+    auto specular = glm::vec3(0.0f, 0.0f, 0.0f);
+    auto cos = std::max(0.0f, glm::dot(grad, light));
+
+    // compute ambient
+    auto ambient = params[0] * color; // kd*ka
+
+    if (cos > 0.0f) {
+
+        // compute diffuse
+        diffuse = params[1] * cos * color; // kd * cos
         // compute specular
         glm::vec3 reflection = glm::normalize(glm::reflect(-light, grad));
         float phi = std::max(0.0f, glm::dot(reflection, view));
         specular = params[2] * std::pow(phi, alpha) * color;
     }
 
+    auto r = (1 + cos) / 2;
+    float beta=.6f, y =.4f, a=.2f, b =.4f;
+    glm::vec3 kCool, kWarm, kBlue, kYellow;
+    kBlue = { 0, 0, b };
+    kYellow = { y, y, 0 };
+    kCool = kBlue + a * color;
+    kWarm = kYellow + beta * color;
+
+    auto I = r * kCool + (1 - r) * kWarm; 
+    diffuse = I * params[1];
     return diffuse + specular + ambient;
 }
-
 // ======= TODO: IMPLEMENT ========
 // In this function, implement 1D transfer function raycasting.
 // Use getTFValue to compute the color for a given volume value according to the 1D transfer function.
@@ -397,5 +519,56 @@ void Renderer::fillColor(int x, int y, const glm::vec4& color)
 {
     const size_t index = static_cast<size_t>(m_config.renderResolution.x * y + x);
     m_frameBuffer[index] = color;
+}
+glm::vec4 Renderer::getColor(int x, int y, int z) const
+{
+    const size_t index = static_cast<size_t>(m_config.renderResolution.x * y + x);
+    return m_frameBuffer[index];
+}
+
+glm::vec4 Renderer::getSampleTriLinearInterpolation(const glm::vec3& coord) const
+{
+
+    int upper_z = ceil(coord[2]);
+    int bottom_z = floor(coord[2]);
+
+    glm::vec2 interp_vec = glm::vec2(coord[0], coord[1]);
+
+    glm::vec4 upper_plane_val = biLinearInterpolate(interp_vec, upper_z);
+    glm::vec4 bottom_plane_val = biLinearInterpolate(interp_vec, bottom_z);
+
+    glm::vec4 interpolated_value = linearInterpolate(bottom_plane_val, upper_plane_val, coord[2] - bottom_z);
+
+    return interpolated_value;
+}
+
+// This function linearly interpolates the value at X using incoming values g0 and g1 given a factor (equal to the positon of x in 1D)
+//
+// g0--X--------g1
+//   factor
+glm::vec4 Renderer::linearInterpolate(glm::vec4 g0, glm::vec4 g1, float factor) const
+{
+
+    return g0 * factor + g1 * (1 - factor);
+}
+
+// This function bi-linearly interpolates the value at the given continuous 2D XY coordinate for a fixed integer z coordinate.
+glm::vec4 Renderer::biLinearInterpolate(const glm::vec2& xyCoord, int z) const
+{
+
+    glm::vec4 neighbor_bottom_left = getColor(floor(xyCoord[0]), floor(xyCoord[1]), z);
+    glm::vec4 neighbor_bottom_right = getColor(ceil(xyCoord[0]), floor(xyCoord[1]), z);
+    glm::vec4 neighbor_upper_left = getColor(floor(xyCoord[0]), ceil(xyCoord[1]), z);
+    glm::vec4 neighbor_upper_right = getColor(ceil(xyCoord[0]), ceil(xyCoord[1]), z);
+
+    if (neighbor_bottom_left == glm::vec4(0) || neighbor_bottom_right == glm::vec4(0) || neighbor_upper_left == glm::vec4(0) || neighbor_upper_right == glm::vec4(0))
+        return getColor(int(xyCoord[0]), int(xyCoord[1]), z);
+
+    glm::vec4 bottom_middle_point = linearInterpolate(neighbor_bottom_left, neighbor_bottom_right, xyCoord[0] - floor(xyCoord[0]));
+    glm::vec4 upper_middle_point = linearInterpolate(neighbor_upper_left, neighbor_upper_right, xyCoord[0] - floor(xyCoord[0]));
+
+    glm::vec4 bilinear_interpolated_point = linearInterpolate(bottom_middle_point, upper_middle_point, xyCoord[1] - floor(xyCoord[1]));
+
+    return bilinear_interpolated_point;
 }
 }

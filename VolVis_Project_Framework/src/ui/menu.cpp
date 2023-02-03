@@ -78,8 +78,10 @@ void Menu::drawMenu(const glm::ivec2& pos, const glm::ivec2& size, std::chrono::
         const auto interpolationModeBefore = m_interpolationMode;
 
         showRayCastTab(renderTime);
+        showCoolWarmShadingTab();
         showTransFuncTab();
         show2DTransFuncTab();
+        
 
         if (m_renderConfig != renderConfigBefore)
             callRenderConfigChangedCallback();
@@ -96,7 +98,7 @@ void Menu::showLoadVolTab()
 {
     if (ImGui::BeginTabItem("Load")) {
 
-        if (ImGui::Button("Load volume")) {
+        if (ImGui::Button("Loaddd volume")) {
             nfdchar_t* pOutPath = nullptr;
             nfdresult_t result = NFD_OpenDialog("fld", nullptr, &pOutPath);
 
@@ -177,7 +179,16 @@ void Menu::show2DTransFuncTab()
         ImGui::EndTabItem();
     }
 }
+void Menu::showCoolWarmShadingTab()
+{
+    if (ImGui::BeginTabItem("Cool to warm shading")) {
+        m_tf2DWidget->draw();
+        m_tf2DWidget->updateRenderConfig(m_renderConfig);
+        ImGui::Text("Render Mode:");
 
+        ImGui::EndTabItem();
+    }
+}
 void Menu::callRenderConfigChangedCallback() const
 {
     if (m_optRenderConfigChangedCallback)
